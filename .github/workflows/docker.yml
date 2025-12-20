@@ -1,1 +1,167 @@
+name: Build and Release and push to dockerhub
 
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build Executables
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      security-events: read
+      pull-requests: read
+
+    strategy:
+      matrix:
+        include:
+          - { go-version: 1.25, go-os: linux, go-arch: amd64 }
+          - { go-version: 1.25, go-os: linux, go-arch: 386 }
+          - { go-version: 1.25, go-os: linux, go-arch: arm64 }
+          - { go-version: 1.25, go-os: linux, go-arch: arm }
+          - { go-version: 1.25, go-os: openbsd, go-arch: amd64 }
+          - { go-version: 1.25, go-os: openbsd, go-arch: 386 }
+          - { go-version: 1.25, go-os: openbsd, go-arch: arm64 }
+          - { go-version: 1.25, go-os: openbsd, go-arch: arm }
+          - { go-version: 1.25, go-os: darwin, go-arch: arm64 }
+          - { go-version: 1.25, go-os: freebsd, go-arch: amd64 }
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        
+      - name: Set up Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go-version }}
+        
+      - name: Build binary
+        run: go build -o magnetico-${{ matrix.go-os }}-${{ matrix.go-arch }} .
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.go-os }}
+          GOARCH: ${{ matrix.go-arch }}
+      
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: magnetico-${{ matrix.go-os }}-${{ matrix.go-arch }}
+          path: magnetico-${{ matrix.go-os }}-${{ matrix.go-arch }}
+
+  release:
+    name: Release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 1440
+
+    permissions:
+      actions: read
+      contents: write
+      packages: write
+      security-events: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Conventional Changelog Action
+        id: changelog
+        uses: TriPSs/conventional-changelog-action@v6
+        with:
+          preset: conventionalcommits
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          git-user-name: ${{ github.actor }}
+          git-user-email: ${{ github.actor }}@users.noreply.github.com
+          input-file: '.github/CHANGELOG.md'
+          output-file: '.github/CHANGELOG.md'
+          release-count: 10000
+          skip-on-empty: false
+          skip-version-file: true
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract repository name
+        id: extract_repo_name
+        run: |
+          REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+          echo "repo_name=$REPO_NAME" >> $GITHUB_OUTPUT
+
+      - name: Set Docker tags
+        id: docker_tags
+        run: |
+          if [ -n "${{ steps.changelog.outputs.tag }}" ]; then
+            TAG="${{ steps.changelog.outputs.tag }}"
+            echo "has_tag=true" >> $GITHUB_OUTPUT
+            echo "docker_tags=ghcr.io/${{ github.repository }}:$TAG,ghcr.io/${{ github.repository }}:latest,docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ steps.extract_repo_name.outputs.repo_name }}:$TAG,docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ steps.extract_repo_name.outputs.repo_name }}:latest" >> $GITHUB_OUTPUT
+            echo "test_tag=ghcr.io/${{ github.repository }}:$TAG" >> $GITHUB_OUTPUT
+          else
+            echo "has_tag=false" >> $GITHUB_OUTPUT
+            echo "docker_tags=ghcr.io/${{ github.repository }}:test,docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ steps.extract_repo_name.outputs.repo_name }}:test" >> $GITHUB_OUTPUT
+            echo "test_tag=ghcr.io/${{ github.repository }}:test" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Login to GitHub Container Registry
+        if: steps.docker_tags.outputs.has_tag == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to DockerHub
+        if: steps.docker_tags.outputs.has_tag == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and test Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ${{ steps.docker_tags.outputs.test_tag }}
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test Docker Image
+        run: |
+          docker run --rm ${{ steps.docker_tags.outputs.test_tag }} --help
+
+      - name: Build and push Docker Image
+        if: steps.docker_tags.outputs.has_tag == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          provenance: mode=max
+          sbom: true
+          tags: ${{ steps.docker_tags.outputs.docker_tags }}
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Download workflow artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: magnetico-*-*
+
+      - name: Create Release
+        if: ${{ steps.changelog.outputs.skipped == 'false' && steps.docker_tags.outputs.has_tag == 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.changelog.outputs.tag }}
+          body: ${{ steps.changelog.outputs.clean_changelog }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: magnetico-*-*/magnetico-*-*
