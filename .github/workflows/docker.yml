@@ -1,10 +1,14 @@
 name: Build and Release and push to dockerhub
 
 on:
-  workflow_dispatch:
   push:
-    tags:
-      - 'v*'
+    branches: [dev]
+  workflow_dispatch:
+
+    inputs:
+      image_tag:
+        description: 'Image tag version'
+        required: true
 
 jobs:
   build:
