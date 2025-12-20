@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
     inputs:
-      tags:
+      image_tag:
         description: 'Image tag version like v2.3.0'
         required: true
 
@@ -115,7 +115,7 @@ jobs:
           #fi
 
       - name: Login to GitHub Container Registry
-        if: steps.docker_tags.outputs.has_tag == 'true'
+        #if: steps.docker_tags.outputs.has_tag == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -123,7 +123,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to DockerHub
-        if: steps.docker_tags.outputs.has_tag == 'true'
+        #if: steps.docker_tags.outputs.has_tag == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -144,7 +144,7 @@ jobs:
           #docker run --rm ${{ steps.docker_tags.outputs.test_tag }} --help
 
       - name: Build and push Docker Image
-        if: steps.docker_tags.outputs.has_tag == 'true'
+        #if: steps.docker_tags.outputs.has_tag == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -156,16 +156,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Download workflow artifacts
-        uses: actions/download-artifact@v7
-        with:
-          pattern: magnetico-*-*
+      #- name: Download workflow artifacts
+        #uses: actions/download-artifact@v7
+        #with:
+          #pattern: magnetico-*-*
 
-      - name: Create Release
+      #- name: Create Release
         #if: ${{ steps.changelog.outputs.skipped == 'false' && steps.docker_tags.outputs.has_tag == 'true' }}
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ inputs.image_tag }}
-          body: ${{ steps.changelog.outputs.clean_changelog }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          files: magnetico-*-*/magnetico-*-*
+        #uses: softprops/action-gh-release@v2
+        #with:
+          #tag_name: ${{ inputs.image_tag }}
+          #body: ${{ steps.changelog.outputs.clean_changelog }}
+          #token: ${{ secrets.GITHUB_TOKEN }}
+          #files: magnetico-*-*/magnetico-*-*
