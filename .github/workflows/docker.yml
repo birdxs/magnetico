@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
 
     inputs:
-      image_tag:
-        description: 'Image tag version'
+      tags:
+        description: 'Image tag version like v2.3.0'
         required: true
 
 jobs:
