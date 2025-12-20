@@ -94,11 +94,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Extract repository name
-        id: extract_repo_name
-        run: |
-          REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
-          echo "repo_name=$REPO_NAME" >> $GITHUB_OUTPUT
+      #- name: Extract repository name
+       # id: extract_repo_name
+      #  run: |
+        #  REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+        #  echo "repo_name=$REPO_NAME" >> $GITHUB_OUTPUT
 
       #- name: Set Docker tags
         #id: docker_tags
@@ -134,7 +134,7 @@ jobs:
         with:
           context: .
           load: true
-          tags: ${{ inputs.image_tag }}
+          tags: ghcr.io/${{ github.repository }}:${{ inputs.image_tag }},ghcr.io/${{ github.repository }}:latest
           platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -151,7 +151,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           provenance: mode=max
           sbom: true
-          tags: ${{ inputs.image_tag }}
+          tags: ghcr.io/${{ github.repository }}:${{ inputs.image_tag }},ghcr.io/${{ github.repository }}:latest
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
