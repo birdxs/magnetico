@@ -4,9 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: 'Image tag version (e.g., v1.0.0, latest)'
+        description: 'Image tag version (e.g., v1.0.0)'
         required: true
-        default: 'latest'
 
   push:
     tags:
@@ -34,11 +33,16 @@ jobs:
         id: tag
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
-            # Extract tag from ref (e.g., v1.0.0)
             TAG=${GITHUB_REF#refs/tags/}
-            echo "image_tag=${TAG}" >> "$GITHUB_OUTPUT"
           else
-            echo "image_tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+            TAG=${{ inputs.image_tag }}
+          fi
+          echo "image_tag=${TAG}" >> "$GITHUB_OUTPUT"
+          # 只有当手动输入的不是 latest 时，才额外推送 latest
+          if [ "${TAG}" = "latest" ]; then
+            echo "also_latest=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "also_latest=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Set up Docker Buildx
@@ -55,7 +59,6 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Docker Hub
-        if: env.DOCKERHUB_IMAGE_NAME != ''
         uses: docker/login-action@v4
         with:
           registry: ${{ env.DOCKERHUB_REGISTRY }}
@@ -69,6 +72,7 @@ jobs:
           images: ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE_NAME }}
           tags: |
             type=raw,value=${{ steps.tag.outputs.image_tag }}
+            type=raw,value=latest,enable=${{ steps.tag.outputs.also_latest == 'true' }}
 
       - name: Extract metadata for Docker Hub
         id: meta-dockerhub
@@ -77,6 +81,7 @@ jobs:
           images: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE_NAME }}
           tags: |
             type=raw,value=${{ steps.tag.outputs.image_tag }}
+            type=raw,value=latest,enable=${{ steps.tag.outputs.also_latest == 'true' }}
 
       - name: Build and push multi-arch images
         uses: docker/build-push-action@v7
@@ -104,24 +109,43 @@ jobs:
       - name: Generate summary
         run: |
           IMAGE_TAG="${{ steps.tag.outputs.image_tag }}"
+          ALSO_LATEST="${{ steps.tag.outputs.also_latest }}"
+          
           echo "### Docker Images Built and Pushed Successfully" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          
           echo "**GitHub Container Registry (GHCR):**" >> $GITHUB_STEP_SUMMARY
           echo "- Image: \`${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Tag: \`${IMAGE_TAG}\`" >> $GITHUB_STEP_SUMMARY
+          if [ "$ALSO_LATEST" = "true" ]; then
+            echo "- Tags: \`${IMAGE_TAG}\`, \`latest\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- Tags: \`latest\`" >> $GITHUB_STEP_SUMMARY
+          fi
           echo "" >> $GITHUB_STEP_SUMMARY
+          
           echo "**Docker Hub:**" >> $GITHUB_STEP_SUMMARY
           echo "- Image: \`${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Tag: \`${IMAGE_TAG}\`" >> $GITHUB_STEP_SUMMARY
+          if [ "$ALSO_LATEST" = "true" ]; then
+            echo "- Tags: \`${IMAGE_TAG}\`, \`latest\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- Tags: \`latest\`" >> $GITHUB_STEP_SUMMARY
+          fi
           echo "" >> $GITHUB_STEP_SUMMARY
+          
           echo "**Platforms:** linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Pull Commands:" >> $GITHUB_STEP_SUMMARY
           echo "**GHCR:**" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
           echo "docker pull ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE_NAME }}:${IMAGE_TAG}" >> $GITHUB_STEP_SUMMARY
+          if [ "$ALSO_LATEST" = "true" ]; then
+            echo "docker pull ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          fi
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "**Docker Hub:**" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
           echo "docker pull ${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE_NAME }}:${IMAGE_TAG}" >> $GITHUB_STEP_SUMMARY
+          if [ "$ALSO_LATEST" = "true" ]; then
+            echo "docker pull ${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          fi
           echo '```' >> $GITHUB_STEP_SUMMARY
