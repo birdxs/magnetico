@@ -8,7 +8,7 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/andybalholm/brotli v1.2.2
 	github.com/goccy/go-yaml v1.19.2
-	github.com/grafana/pyroscope-go v1.3.1
+	github.com/grafana/pyroscope-go v1.4.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/klauspost/compress v1.19.0
@@ -17,7 +17,7 @@ require (
 	github.com/pebbe/zmq4 v1.4.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/rabbitmq/amqp091-go v1.12.0
-	golang.org/x/crypto v0.53.0
+	golang.org/x/crypto v0.54.0
 	maragu.dev/gomponents v1.3.0
 )
 
@@ -39,9 +39,9 @@ require (
 	github.com/prometheus/common v0.69.0 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	golang.org/x/sync v0.21.0 // indirect
-	golang.org/x/sys v0.46.0 // indirect
-	golang.org/x/text v0.38.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
